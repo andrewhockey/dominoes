@@ -1,0 +1,746 @@
+
+'******************************************
+'*                                        *
+'*   DOMINOES   by  Jim Hockey            *
+'*   --------       41 Steel Street       *
+'*                  Jesmond NSW 2299      *
+'*                  Australia             *
+'*   25-OCT-89      Phone (049) 52 2xxx   *
+'*                                        *
+'******************************************
+
+  GOSUB HouseKeeping
+  
+WaitLoop:
+  ON MOUSE GOSUB GotMouse:MOUSE ON:SLEEP:GOTO WaitLoop
+                       
+GotMouse:
+  x=MOUSE(0):MOUSE OFF:mx%=MOUSE(3):my%=MOUSE(4)
+
+'    Initial screen
+
+  IF scrn%=1 THEN
+    GOSUB SetupGameScreen:GOSUB DisplayBoneCounts
+    GOSUB DisplayGameScores:GOSUB DisplayNumsPlayed
+    bonewanted%=0:sidewanted%=0
+    mess$="Select HARD or EASY and then NEW GAME."
+    GOSUB DisplayMess:GOSUB TieSound
+    GOTO GotMouse.exit
+  END IF
+
+'    Game screen
+    
+  IF scrn%=2 THEN
+    IF mx%>8 AND mx%<56 THEN
+      IF my%>180 AND my%<194 THEN Terminate
+      IF my%>164 AND my%<178 THEN GOSUB Instructions:GOTO GotMouse.exit
+      IF my%>140 AND my%<162 THEN NewGame
+      IF my%>108 AND my%<120 THEN
+        IF level%=1 THEN level%=2 ELSE level%=1
+        COLOR 0,1:LOCATE 15,3
+        IF level%=1 THEN PRINT "EASY" ELSE PRINT "HARD"
+        GOTO GotMouse.exit
+      END IF
+    ELSEIF bonewanted%=1 AND mx%>65 AND mx%<103 THEN
+      IF my%>23 AND my%<192 THEN
+        hplay%=(my%-15)\8:IF hplay%>hlim% THEN GotMouse.exit
+        GOTO HumanSelectedBone
+      END IF
+    ELSEIF sidewanted%=1 AND my%>36 AND my%<66 THEN
+      sidewanted%=0
+      IF mx%>215 AND mx%<265 THEN side%=1:GOTO HumanPlays
+      IF mx%>295 AND mx%<345 THEN side%=2:GOTO HumanPlays
+      sidewanted%=1:GOTO GotMouse.exit
+    END IF
+  END IF
+
+'    Instructions screen
+    
+  IF scrn%=3 THEN
+    IF mx%>343 AND mx%<393 THEN Terminate
+    IF mx%>215 AND mx%<321 THEN ResumeGame
+  END IF
+
+GotMouse.exit:
+  MOUSE ON
+  RETURN
+  
+'    Amys turn
+  
+AmysTurn:
+  IF hlim%<1 OR alim%<1 OR acantgo%+hcantgo%=2 THEN GameFinished
+  pc%=0:acantgo%=0
+  FOR i%=1 TO alim%
+    ppb%=ahand%(i%):GOSUB MatchBones
+    IF match%>0 THEN pc%=pc%+1:aplay%=i%:side%=match%   
+  NEXT
+  IF pc%=0 THEN
+    IF yardlim%>0 THEN
+      alim%=alim%+1:ahand%(alim%)=yard%(yardlim%)
+      mess$="Amy draws "+bone$(ahand%(alim%)):GOSUB DisplayMess
+      yardlim%=yardlim%-1:GOSUB DisplayBoneCounts  
+      GOTO AmysTurn
+    END IF
+    acantgo%=1
+    GOTO HumansTurn
+  END IF
+  
+  IF pc%=1 THEN AmyPlays
+  
+  IF level%=1 THEN AmyPlays
+  
+  mess$="Amy is thinking.":GOSUB DisplayMess
+
+'    Determine which side bones are playable on.
+
+  lcnt%=0:rcnt%=0
+  FOR i%=1 TO alim%
+    lb%=bone%(ahand%(i%),0):lr%=bone%(ahand%(i%),1)
+    IF lb%=curbonel% THEN lcnt%=lcnt%+1:lll%(lcnt%)=i%
+    IF lb%=curboner% THEN rcnt%=rcnt%+1:rrr%(rcnt%)=i%
+    IF lr%=curbonel% AND lb%<>lr% THEN lcnt%=lcnt%+1:lll%(lcnt%)=i%
+    IF lr%=curboner% AND lb%<>lr% THEN rcnt%=rcnt%+1:rrr%(rcnt%)=i%
+  NEXT
+
+'    We now evaluate Amy's hand. We determine every playable combination.
+'    Variables used reflect where bone is playable.
+'    l1 = Playable on left.
+'    l2 = Playable on l1.
+'    r1 = Playable on right.
+'    r2 = Playable on r1.
+
+  pl%=0:rsvl%=0:rsvr%=0:l1%=0:r1%=0
+  l1$="":l2$="":r1$="":r2$=""
+  
+AmysTurnL1:
+  IF lcnt%=0 THEN AmysTurnR1
+  l1%=l1%+1:IF l1%>lcnt% THEN AmysTurnPlay
+  z%=lll%(l1%):IF bone%(ahand%(z%),0)=curbonel% THEN x%=1 ELSE x%=0
+  newleft%=bone%(ahand%(z%),x%)
+  l1$=CHR$(ahand%(z%)):x$=l1$+"x":xl%=LEN(x$)
+  IF xl%=pl% THEN IF x$<>RIGHT$(play$,pl%) THEN play$=play$+x$
+  IF xl%>pl% THEN play$=x$:pl%=LEN(x$)
+  rsvl%=z%:r1%=0:l2%=0
+  IF rcnt%=0 THEN AmysTurnL2
+  
+AmysTurnR1:
+  rsvr%=0:r1%=r1%+1
+  IF r1%>rcnt% THEN IF lcnt%=0 THEN AmysTurnPlay ELSE AmysTurnL1
+  z%=rrr%(r1%):IF z%=rsvl% THEN AmysTurnR1
+  IF bone%(ahand%(z%),0)=curboner% THEN x%=1 ELSE x%=0
+  newright%=bone%(ahand%(z%),x%)
+  r1$=CHR$(ahand%(z%)):x$=l1$+"x"+r1$:xl%=LEN(x$)
+  IF xl%=pl% THEN IF x$<>RIGHT$(play$,pl%) THEN play$=play$+x$
+  IF xl%>pl% THEN play$=x$:pl%=LEN(x$)
+  rsvr%=z%:l2%=0:r2%=0
+  IF lcnt%=0 THEN AmysTurnR2
+  
+AmysTurnL2:
+  l2$="":l2%=l2%+1
+  IF l2%>alim% THEN IF rcnt%=0 THEN AmysTurnL1 ELSE AmysTurnR1
+  IF NOT (l2%=rsvl% OR l2%=rsvr%) THEN
+    IF bone%(ahand%(l2%),0)=newleft% THEN l2$=CHR$(ahand%(l2%))
+    IF bone%(ahand%(l2%),1)=newleft% THEN l2$=CHR$(ahand%(l2%))
+  END IF
+  IF l2$<>"" THEN
+    x$=l2$+l1$+"x"+r1$:xl%=LEN(x$)
+    IF xl%=pl% THEN IF x$<>RIGHT$(play$,pl%) THEN play$=play$+x$
+    IF xl%>pl% THEN play$=x$:pl%=LEN(x$)
+    IF pl%=4 THEN
+      IF double%(ASC(l1$))=1 THEN
+        play$=RIGHT$(play$,4):GOTO AmysTurnPlay
+      END IF
+    END IF
+  END IF
+  IF rcnt%=0 THEN AmysTurnL2
+  r2%=0
+
+AmysTurnR2:
+  r2$="":r2%=r2%+1
+  IF r2%>alim% THEN IF lcnt%=0 THEN AmysTurnR1 ELSE AmysTurnL2
+  IF NOT (r2%=rsvl% OR r2%=rsvr%) THEN
+    IF bone%(ahand%(r2%),0)=newright% THEN r2$=CHR$(ahand%(r2%))
+    IF bone%(ahand%(r2%),1)=newright% THEN r2$=CHR$(ahand%(r2%))
+  END IF
+  IF r2$="" THEN AmysTurnR2
+  x$=l2$+l1$+"x"+r1$+r2$:xl%=LEN(x$)
+  IF xl%=pl% THEN IF x$<>RIGHT$(play$,pl%) THEN play$=play$+x$
+  IF xl%>pl% THEN play$=x$:pl%=LEN(x$)
+  IF pl%=4 THEN
+    IF double%(ASC(r1$))=1 THEN
+      play$=RIGHT$(play$,4):GOTO AmysTurnPlay
+    END IF
+    GOTO AmysTurnR2
+  END IF
+  IF pl%=5 THEN
+    IF double%(ASC(r1$))=1 THEN
+      play$=RIGHT$(play$,5):GOTO AmysTurnPlay
+    ELSEIF double%(ASC(l1$))=1 THEN
+      play$=RIGHT$(play$,5):GOTO AmysTurnPlay
+    END IF
+  END IF
+  GOTO AmysTurnR2
+
+'    We now work out which bone to play. The variable play$ will contain
+'    combinations in the following formats.
+'
+'       LLxRR   or   LLxR   or   LLx   or   Lx
+'                    LxRR        LxR        xR
+'                                xRR
+'
+'    where the innermost L's and R's represent playable bones.
+ 
+AmysTurnPlay:
+  last%=LEN(play$)-pl%+1:priority%=0
+  IF pl%=3 THEN AmysTurnPlay3
+  IF pl%=4 THEN AmysTurnPlay4
+  IF pl%=5 THEN AmysTurnPlay5
+
+'    Handle Lx and xR combinations.
+'    Play first doublet found or last combo found.
+
+AmysTurnPlay2:
+  FOR i%=1 TO last% STEP 2
+    pp1%=ASC(MID$(play$,i%,1))
+    pp2%=ASC(MID$(play$,i%+1,1))
+    IF pp1%=120 THEN IF double%(pp2%)=1 THEN i%=last%
+    IF pp2%=120 THEN IF double%(pp1%)=1 THEN i%=last%
+  NEXT
+  x%=pp1%:side%=1:IF pp1%=120 THEN x%=pp2%:side%=2
+  aplay%=1:WHILE ahand%(aplay%)<>x%:aplay%=aplay%+1:WEND
+  GOTO AmyPlays
+  
+'    Handle LLx, LxR and xRR combinations.
+'    Priorities = 1. LxR with no doublet.
+'                 2. LLx or xRR with no doublet.
+'                 3. LLx or xRR with outer doublet.
+'                 4. LxR with doublet.
+'                 5. LLx or xRR with inner doublet.
+
+AmysTurnPlay3:
+  FOR i%=1 TO last% STEP 3
+    pp1%=ASC(MID$(play$,i%,1))
+    pp2%=ASC(MID$(play$,i%+1,1))
+    pp3%=ASC(MID$(play$,i%+2,1))
+    IF pp2%=120 THEN
+      prty%=1:IF double%(pp1%)=1 OR double%(pp3%)=1 THEN prty%=4
+    ELSEIF pp1%=120 THEN
+      prty%=2
+      IF double%(pp3%)=1 THEN prty%=3
+      IF double%(pp2%)=1 THEN prty%=5
+    ELSE
+      prty%=2
+      IF double%(pp1%)=1 THEN prty%=3
+      IF double%(pp2%)=1 THEN prty%=5
+    END IF
+    IF prty%>priority% THEN priority%=prty%:p1%=pp1%:p2%=pp2%:p3%=pp3%
+  NEXT
+  IF p2%=120 THEN
+    side%=1:x%=p1%:IF double%(p3%)=1 THEN side%=2:x%=p3%
+  ELSE
+    x%=p2%:side%=1:IF pp1%=120 THEN side%=2
+  END IF
+  aplay%=1:WHILE ahand%(aplay%)<>x%:aplay%=aplay%+1:WEND
+  GOTO AmyPlays
+  
+'    Handle LLxR and LxRR combinations.
+'    Priorities = 1. No doublet on side with two bones.
+'                 2. Outer doublet on side with two bones.
+'                 3. Inner doublet on side with two bones.
+
+AmysTurnPlay4:
+  FOR i%=1 TO last% STEP 4
+    pp1%=ASC(MID$(play$,i%,1))
+    pp2%=ASC(MID$(play$,i%+1,1))
+    pp3%=ASC(MID$(play$,i%+2,1))
+    pp4%=ASC(MID$(play$,i%+3,1))
+    IF pp2%=120 THEN
+      prty%=1
+      IF double%(pp4%)=1 THEN prty%=2
+      IF double%(pp3%)=1 THEN prty%=3
+    ELSE
+      prty%=1
+      IF double%(pp1%)=1 THEN prty%=2
+      IF double%(pp2%)=1 THEN prty%=3
+      prty%=2
+    END IF
+    IF prty%>priority% THEN priority%=prty%:p2%=pp2%:p3%=pp3%
+  NEXT
+  side%=1:x%=p2%:IF p2%=120 THEN side%=2:x%=p3%
+  aplay%=1:WHILE ahand%(aplay%)<>x%:aplay%=aplay%+1:WEND
+  GOTO AmyPlays
+
+'    Handle LLxRR combinations.
+'    Priorities = 1. No doublets.
+'                 2. Outer doublet.
+'                 3. Inner doublet.
+
+AmysTurnPlay5:
+  FOR i%=1 TO last% STEP 5
+    pp1%=ASC(MID$(play$,i%,1))
+    pp2%=ASC(MID$(play$,i%+1,1))
+    pp4%=ASC(MID$(play$,i%+3,1))
+    pp5%=ASC(MID$(play$,i%+4,1))
+    prty%=1
+    IF double%(pp1%)=1 OR double%(pp5%)=1 THEN prty%=2
+    IF double%(pp2%)=1 OR double%(pp4%)=1 THEN prty%=3
+    IF prty%>priority% THEN
+      priority%=prty%:p1%=pp1%:p2%=pp2%:p4%=pp4%:p5%=pp5%
+    END IF
+  NEXT
+  side%=2:x%=p4%
+  IF double%(p1%)=1 THEN side%=1:x%=p2%
+  IF double%(p5%)=1 THEN side%=2:x%=p4%
+  IF double%(p2%)=1 THEN side%=1:x%=p2%
+  IF double%(p4%)=1 THEN side%=2:x%=p4%
+  aplay%=1:WHILE ahand%(aplay%)<>x%:aplay%=aplay%+1:WEND
+  GOTO AmyPlays
+  
+'    Humans turn
+  
+HumansTurn:
+  IF hlim%<1 OR alim%<1 OR acantgo%+hcantgo%=2 THEN GameFinished
+  pc%=0:hcantgo%=0
+  FOR i%=1 TO hlim%
+    ppb%=hhand%(i%):GOSUB MatchBones
+    IF match%<>0 THEN pc%=pc%+1:hplay%=i%:side%=match%    
+  NEXT
+  IF pc%=1 THEN
+    IF side%<>3 THEN HumanPlays
+    IF hlim%=1 THEN HumanPlays
+    mess$="Select side to play "+bone$(hhand%(hplay%))+" on."
+    sidewanted%=1:GOSUB DisplayMess:GOSUB Beap1
+    GOTO GotMouse.exit
+  END IF
+  IF pc%>1 THEN
+    bonewanted%=1:mess$="Select your bone.":GOSUB DisplayMess:GOSUB Beap
+    GOTO GotMouse.exit
+  END IF
+  IF yardlim%>0 THEN
+    hlim%=hlim%+1:hhand%(hlim%)=yard%(yardlim%)
+    mess$="You draw "+bone$(hhand%(hlim%)):GOSUB DisplayMess
+    GOSUB SortHumansBones:GOSUB DisplayHumansBones
+    yardlim%=yardlim%-1:GOSUB DisplayBoneCounts  
+    GOTO HumansTurn
+  END IF
+  hcantgo%=1
+  GOTO AmysTurn
+  
+'    Human plays
+  
+HumanPlays:
+  pb%=hhand%(hplay%):pb$=bone$(pb%)
+  mess$="YOU play "+pb$+".":GOSUB DisplayMess
+  hplayed%=hplayed%+1:hplayed$(hplayed%)=pb$  
+  LOCATE 5+hplayed%,61:COLOR 2,3:PRINT pb$;
+  FOR i%=hplay% TO hlim%:hhand%(i%)=hhand%(i%+1):NEXT:hlim%=hlim%-1
+  GOSUB PlayBone:GOSUB SortHumansBones:GOSUB DisplayHumansBones
+  GOTO AmysTurn
+  
+'    Amy plays
+  
+AmyPlays:
+  pb%=ahand%(aplay%):pb$=bone$(pb%)
+  mess$="AMY plays "+pb$+".":GOSUB DisplayMess
+  aplayed%=aplayed%+1:aplayed$(aplayed%)=pb$  
+  LOCATE 5+aplayed%,70:COLOR 2,3:PRINT pb$;
+  FOR i%=aplay% TO alim%:ahand%(i%)=ahand%(i%+1):NEXT:alim%=alim%-1
+  GOSUB PlayBone
+  GOTO HumansTurn
+  
+'    Play a bone.
+
+PlayBone:
+  lp%=bone%(pb%,0):rp%=bone%(pb%,1)
+  IF side%=1 THEN
+    IF lp%=curbonel% THEN curbonel%=rp% ELSE curbonel%=lp%
+  ELSEIF side%=2 THEN
+    IF rp%=curboner% THEN curboner%=lp% ELSE curboner%=rp%
+  ELSE
+    curbonel%=lp%:curboner%=lp%
+  END IF
+  numsplayed%(lp%)=numsplayed%(lp%)+1
+  IF lp%<>rp% THEN numsplayed%(rp%)=numsplayed%(rp%)+1
+  GOSUB DisplayBoneCounts:GOSUB DisplayNumsPlayed
+  GOSUB DisplayCurrentBone
+  RETURN
+
+'    Human has selected a bone
+
+HumanSelectedBone:
+  ppb%=hhand%(hplay%):GOSUB MatchBones:side%=match%      
+  IF side%=1 OR side%=2 THEN
+    bonewanted%=0:GOTO HumanPlays
+  ELSEIF side%=3 THEN
+    bonewanted%=0:sidewanted%=1
+    mess$="Select side to play "+bone$(hhand%(hplay%))+" on."
+    GOSUB DisplayMess:GOSUB Beap1
+  ELSE
+    mess$=bone$(hhand%(hplay%))+" cannot be played. Try again."
+    GOSUB DisplayMess:GOSUB WeeWah
+  END IF
+  GOTO GotMouse.exit
+
+'    Return from instructions screen
+
+ResumeGame:
+  GOSUB SetupGameScreen
+  GOSUB DisplayBoneCounts:GOSUB DisplayGameScores
+  GOSUB DisplayHumansBones
+  GOSUB DisplayCurrentBone
+  GOSUB DisplayNumsPlayed
+  GOSUB DisplayMess
+  IF hplayed%>0 THEN
+    FOR i%=1 TO hplayed%:LOCATE 5+i%,61:COLOR 2,3:PRINT hplayed$(i%);:NEXT
+  END IF
+  IF aplayed%>0 THEN
+    FOR i%=1 TO aplayed%:LOCATE 5+i%,70:COLOR 2,3:PRINT aplayed$(i%);:NEXT
+  END IF
+  GOTO GotMouse.exit
+
+'    Start a new game
+
+NewGame:
+  GOSUB SetupGameScreen:GOSUB DealHands
+  GOSUB DisplayBoneCounts: GOSUB DisplayGameScores
+  GOSUB SortHumansBones:GOSUB DisplayHumansBones
+  FOR i%=0 TO 6:numsplayed%(i%)=0:NEXT
+  aplayed%=0:hplayed%=0:bonewanted%=0:sidewanted%=0
+  acantgo%=0:hcantgo%=0:side%=7
+  IF hplay%>0 THEN HumanPlays
+  GOTO AmyPlays
+
+'    Display the current bone
+
+DisplayCurrentBone:
+  COLOR 2,1
+  LOCATE 6,29:PRINT boneg$(curbonel%,0)
+  LOCATE 7,29:PRINT boneg$(curbonel%,1)
+  LOCATE 8,29:PRINT boneg$(curbonel%,2)
+  LOCATE 6,39:PRINT boneg$(curboner%,0)
+  LOCATE 7,39:PRINT boneg$(curboner%,1)
+  LOCATE 8,39:PRINT boneg$(curboner%,2)
+  RETURN
+  
+'    Display numbers of each bone played
+  
+DisplayNumsPlayed:
+  COLOR 2,3
+  FOR i%=0 TO 6:LOCATE 15,27+i%*3:PRINT USING "#";numsplayed%(i%):NEXT
+  RETURN
+
+'    Display empty Game Screen
+
+SetupGameScreen:
+  COLOR 2,4:CLS:LINE (213,4)-(355,18),2,bf:LINE (218,6)-(350,16),5,bf
+  COLOR 2,5:LOCATE 2,29:PRINT "D O M I N O E S"
+  DRAWBOX 2,7,9,1,2,5:LOCATE 2,7:COLOR 2,5:PRINT "YOUR HAND"
+  DRAWBOX 4,10,3,21,2,5
+  DRAWBOX 2,61,12,1,2,3:LOCATE 2,61:COLOR 2,3:PRINT "BONES PLAYED"
+  DRAWBOX 4,61,3,1,2,3:COLOR 2,3:LOCATE 4,61:PRINT "YOU"
+  DRAWBOX 6,61,3,19,2,3
+  DRAWBOX 4,70,3,1,2,3:COLOR 2,3:LOCATE 4,70:PRINT "AMY"
+  DRAWBOX 6,70,3,19,2,3
+  DRAWBOX 6,29,14,3,2,1:DRAWBOX 6,35,2,3,2,2
+  DRAWBOX 18,21,12,5,2,6:COLOR 2,6
+  LOCATE 18,24:PRINT "BONES":LINE (184,144)-(223,144),2
+  LOCATE 20,21:PRINT " YARD ="
+  LOCATE 21,21:PRINT "  YOU ="
+  LOCATE 22,21:PRINT "  AMY ="
+  DRAWBOX 18,42,11,5,2,7:COLOR 2,7
+  LOCATE 18,45:PRINT "GAMES":LINE (352,144)-(391,144),2
+  LOCATE 20,43:PRINT "YOU ="
+  LOCATE 21,43:PRINT "AMY ="
+  LOCATE 22,43:PRINT "TIE ="
+  DRAWBOX 11,27,19,5,2,3:COLOR 0,3
+  LOCATE 11,27:PRINT "PLAYED BONES COUNTS":LINE (207,88)-(358,88),0
+  LOCATE 13,27:PRINT "0  1  2  3  4  5  6"
+  COLOR 2,3:FOR cc%=27 TO 45 STEP 3:DRAWBOX 15,cc%,1,1,2,3:NEXT
+  DRAWBOX 24,17,40,1,2,1
+  COLOR 0,1:DRAWBOX 15,3,4,1,2,1:LOCATE 15,3
+  IF level%=1 THEN PRINT "EASY" ELSE PRINT "HARD"
+  DRAWBOX 19,3,4,2,2,1:LOCATE 19,3:PRINT "NEW":LOCATE 20,3:PRINT "GAME" 
+  DRAWBOX 22,3,4,1,2,1:LOCATE 22,3:PRINT "HELP" 
+  DRAWBOX 24,3,4,1,2,1:LOCATE 24,3:PRINT "QUIT";
+  scrn%=2
+  RETURN
+  
+'    Print message
+  
+DisplayMess:
+  COLOR 2,1:LOCATE 24,17:PRINT SPACE$(40);
+  LOCATE 24,17+INT((41-LEN(mess$))/2):PRINT mess$;
+  RETURN
+  
+'    Display bone counts.
+  
+DisplayBoneCounts:
+  COLOR 2,6:LOCATE 20,29
+  IF yardlim%=0 THEN PRINT "MT" ELSE PRINT USING "##";yardlim%
+  LOCATE 21,29:PRINT USING "##";hlim%
+  LOCATE 22,29:PRINT USING "##";alim%
+  RETURN
+  
+'      Display game scores.
+  
+DisplayGameScores:
+  COLOR 2,7
+  LOCATE 20,49:PRINT USING "###";hgame%
+  LOCATE 21,49:PRINT USING "###";agame%
+  LOCATE 22,49:PRINT USING "###";tgame%
+  RETURN
+
+'      Deal Hands.
+  
+DealHands:
+  mess$="Dealing.":GOSUB DisplayMess
+  FOR i%=1 TO 28:yard%(i%)=i%:NEXT
+  yardlim%=14:hplay%=0:aplay%=0
+  WHILE hplay%=0 AND aplay%=0
+    FOR i%=1 TO 27:j%=i%+(28-i%)*RND:SWAP yard%(i%),yard%(j%):NEXT
+    alim%=0:hlim%=0:dbl%=-1
+    FOR i%=15 TO 21:hlim%=hlim%+1:hhand%(hlim%)=yard%(i%):NEXT
+    FOR i%=22 TO 28
+      alim%=alim%+1:ahand%(alim%)=yard%(i%)
+      IF double%(yard%(i%))=1 THEN
+        IF ahand%(alim%)>dbl% THEN aplay%=alim%:dbl%=ahand%(alim%)
+      END IF
+    NEXT
+    GOSUB SortHumansBones
+    FOR i%=1 TO hlim%
+      IF double%(hhand%(i%))=1 THEN
+        IF hhand%(i%)>dbl% THEN hplay%=i%:dbl%=hhand%(i%):aplay%=0
+      END IF
+    NEXT
+  WEND
+  RETURN
+    
+'      Sort Human's bones.
+  
+SortHumansBones:
+  IF hlim%>1 THEN
+    swapsw%=1
+    WHILE swapsw%=1
+      swapsw%=0
+      FOR i%=1 TO hlim%-1
+        IF hhand%(i%)>hhand%(i%+1) THEN
+          SWAP hhand%(i%),hhand%(i%+1):swapsw%=1
+        END IF
+      NEXT
+    WEND
+  END IF
+  RETURN
+    
+'      Display Human's bones.
+  
+DisplayHumansBones:
+  DRAWBOX 4,10,3,21,2,5:COLOR 2,5
+  IF hlim%>0 THEN 
+    FOR i%=1 TO hlim%:LOCATE 3+i%,10:PRINT bone$(hhand%(i%)):NEXT
+  END IF
+  RETURN
+
+'   Determine bone relationships.
+
+MatchBones:
+  match%=0
+  il%=bone%(ppb%,0):ir%=bone%(ppb%,1)
+  jl%=curbonel%:jr%=curboner%
+  IF il%=ir% THEN
+    IF (jl%=jr% AND il%=jl%) OR il%=jl% THEN
+      match%=1
+    ELSEIF il%=jr% THEN
+      match%=2
+    END IF
+  ELSE
+    IF (il%=jl% AND ir%<>jr%) OR (ir%=jl% AND il%<>jr%) THEN
+      match%=1
+    ELSEIF (il%=jr% AND ir%<>jl%) OR (ir%=jr% AND il%<>jl%) THEN
+      match%=2
+    ELSEIF (il%=jl% AND ir%=jr%) OR (ir%=jl% AND il%=jr%) THEN
+      match%=3
+    END IF
+  END IF
+  RETURN
+  
+'      Game is finished.
+  
+GameFinished:
+  IF alim%<1 THEN
+    mess$="AMY wins.":winner%=1:agame%=agame%+1
+  ELSEIF hlim%<1 THEN
+    mess$="YOU win.":winner%=2:hgame%=hgame%+1
+  ELSE
+    hb%=0:ab%=0
+    FOR i%=1 TO hlim%:hb%=hb%+bone%(hhand%(i%),0)+bone%(hhand%(i%),1):NEXT
+    FOR i%=1 TO alim%:ab%=ab%+bone%(ahand%(i%),0)+bone%(ahand%(i%),1):NEXT
+    IF hb%>ab% THEN
+      mess$="AMY wins.  AMY ="+STR$(ab%)+"  YOU ="+STR$(hb%)+"."
+      winner%=1:agame%=agame%+1
+    ELSEIF ab%>hb% THEN
+      mess$="YOU win.  YOU ="+STR$(hb%)+"  AMY ="+STR$(ab%)+"."
+      winner%=2:hgame%=hgame%+1
+    ELSE
+      mess$="TIED game.  YOU & AMY ="+STR$(ab%)+"."
+      winner%=3:tgame%=tgame%+1
+    END IF
+  END IF
+  GOSUB DisplayMess:GOSUB DisplayGameScores
+  IF winner%=1 THEN GOSUB AmyWinSound
+  IF winner%=2 THEN GOSUB HumanWinSound
+  IF winner%=3 THEN GOSUB TieSound
+  GOTO GotMouse.exit
+  
+'    HouseKeeping
+  
+HouseKeeping:
+  SCREEN 1,640,200,3,2:WINDOW 2,,,16,1
+  PALETTE 0,0,0,1     ' Deep blue
+  PALETTE 1,1,1,1     ' White
+  PALETTE 2,0,0,0     ' Black
+  PALETTE 3,1,.77,0   ' Orange
+  PALETTE 4,0,.7,0    ' Green
+  PALETTE 5,1,1,0     ' Yellow
+  PALETTE 6,1,0,0     ' Red
+  PALETTE 7,0,.73,1   ' Light Blue
+
+  COLOR 2,6:CLS:LINE (5,4)-(147,18),2,bf:LINE (10,6)-(142,16),5,bf
+  COLOR 2,5:LOCATE 2,3:PRINT "D O M I N O E S"
+  LOCATE 2,24:COLOR 2,6:PRINT "by"
+  LINE (232,5)-(328,17),2,bf:LINE (234,6)-(326,16),1,bf
+  LOCATE 2,31:COLOR 0,1:PRINT "Jim Hockey"
+  LINE (100,55)-(532,135),2,bf:LINE (102,56)-(530,134),1,bf
+  LINE (104,57)-(528,133),2,bf:LINE (106,58)-(526,132),5,bf
+  LINE (108,59)-(524,131),2,bf:LINE (110,60)-(522,130),1,bf
+  LINE (112,61)-(520,129),2,bf:LINE (114,62)-(518,128),4,bf
+  COLOR 2,4
+  LOCATE 10,18:PRINT "This game is entirely controlled by the left"
+  LOCATE 11,18:PRINT "mouse button in conjunction with the pointer."
+  LOCATE 13,18:PRINT "To select one of the options listed down the"
+  LOCATE 14,18:PRINT "left of the screen, simply point to it and"
+  LOCATE 15,18:PRINT "click the left mouse button."
+  hgame%=0:agame%=0:tgame%=0:scrn%=1:level%=2
+  RANDOMIZE TIMER
+
+  DIM yard%(28)         ' shuffled bones
+  DIM hhand%(22)        ' Humans hand
+  DIM ahand%(22)        ' Amys hand
+  DIM numsplayed%(6)    ' counts of bones played
+  DIM boneg$(6,2)       ' bones graphics
+  DIM bone$(128)         ' bones in display format
+  DIM bone%(28,1)       ' bone values    
+  DIM double%(28)       ' identifies doubles 
+  DIM aplayed$(21)      ' bones played by Amy
+  DIM hplayed$(21)      ' bones played by Human
+
+'    Set up bones graphics.
+
+  boneg$(0,0)="    ":boneg$(0,1)="    ":boneg$(0,2)="    "
+  boneg$(1,0)="    ":boneg$(1,1)=" *  ":boneg$(1,2)="    "
+  boneg$(2,0)=" *  ":boneg$(2,1)="    ":boneg$(2,2)=" *  "
+  boneg$(3,0)=" *  ":boneg$(3,1)=" *  ":boneg$(3,2)=" *  "
+  boneg$(4,0)="*  *":boneg$(4,1)="    ":boneg$(4,2)="*  *"
+  boneg$(5,0)="* * ":boneg$(5,1)=" *  ":boneg$(5,2)="* * "
+  boneg$(6,0)="*  *":boneg$(6,1)="*  *":boneg$(6,2)="*  *"
+
+'    Create bones.
+
+  c%=28
+  FOR i%=6 TO 0 STEP -1
+    FOR j%=i% TO 0 STEP -1
+      IF i%=j% THEN double%(c%)=1
+      bone$(c%)=RIGHT$(STR$(i%),1)+":"+RIGHT$(STR$(j%),1)
+      bone%(c%,0)=i%:bone%(c%,1)=j%:c%=c%-1
+    NEXT
+  NEXT
+
+  LINE (128,157)-(496,169),2,bf:LINE (130,158)-(494,168),7,bf
+  LOCATE 21,19:COLOR 2,7
+  PRINT "Tickle Rodent's left ear to get under way."
+  RETURN
+
+'    End of job
+  
+Terminate:
+  WINDOW CLOSE 2:SCREEN CLOSE 1:SYSTEM
+
+'    Instructions
+
+Instructions:
+  COLOR 2,3:CLS:LINE (5,4)-(147,18),2,bf:LINE (10,6)-(142,16),5,bf
+  COLOR 2,5:LOCATE 2,3:PRINT "D O M I N O E S"
+  COLOR 2,3:LOCATE 4,1
+  PRINT " RULES: 1. Play is commenced by the player with ";
+  PRINT "the largest 'doublet' playing"
+  PRINT "           it (if neither player has a 'doublet' ";
+  PRINT "then the deal is repeated)."
+  PRINT "        2. If a player is able to do so, then they";
+  PRINT " must play (drawing from"
+  PRINT "           the boneyard to try and improve one's ";
+  PRINT "hand is not allowed)."
+  PRINT "        3. If unable to play, a player must draw ";
+  PRINT "from the boneyard until "
+  PRINT "           they are able to play or the boneyard is empty."
+  PRINT 
+  PRINT " AUTOMATIC PLAY: When it is your turn to play, if ";
+  PRINT "you have either a single ""
+  PRINT SPC(17)"playable bone or need to draw a bone, then ";
+  PRINT "the computer will"
+  PRINT SPC(17)"kindly relieve you of this onerous duty and";
+  PRINT " do it for you."
+  PRINT 
+  PRINT " PLAYING: 1. When asked to 'Select your bone', point ";
+  PRINT "to the bone you wish to"
+  PRINT SPC(13)"play (in the YOUR HAND column) and ";
+  PRINT "tickle the Rodent's left ear."
+  PRINT SPC(10)"2. When asked to 'Select side ....' point to ";
+  PRINT "either the left or"
+  PRINT SPC(13)"right side of the 'current bone' display and ";
+  PRINT "tickle Rodent."
+  PRINT
+  PRINT " HARD/EASY: This toggle type gadget changes the way ";
+  PRINT "AMY plays (considerably)."
+  PRINT
+  PRINT " PLAYED BONES COUNTS: These are for your use (AMY ";
+  PRINT "doesn't bother with them)."
+  LINE (216,181)-(320,193),2,bf:LINE (218,182)-(318,192),7,bf
+  LOCATE 24,29:COLOR 2,7:PRINT "RESUME GAME";
+  LINE (344,181)-(392,193),2,bf:LINE (346,182)-(390,192),7,bf
+  LOCATE 24,45:COLOR 2,7:PRINT "QUIT";
+  scrn%=3
+  RETURN
+
+'    Sound effects
+  
+Beap:
+  SOUND 880,1
+  RETURN
+  
+Beap1:
+  FOR i%=800 TO 200 STEP -50:SOUND i%,.2:NEXT 
+  RETURN
+  
+WeeWah:
+  SOUND 155,15,99:SOUND 110,20,99
+  RETURN
+
+AmyWinSound:
+  j%=300:FOR i%=1 TO 16:j%=500-j%:SOUND j%,1,100:NEXT
+  RETURN
+    
+TieSound:
+  FOR i%=2 TO 8:SOUND 100*i%,2,100:NEXT:FOR j%=1 TO 2500:NEXT
+  FOR i%=7 TO 2 STEP -1:SOUND 100*i%,2,100:NEXT
+  RETURN
+  
+HumanWinSound:
+  FOR i%=1 TO 5:FOR j%=800 TO 200 STEP -50:SOUND j%,.2:NEXT :NEXT 
+  RETURN
+  
+'    Box Drawing subroutine
+
+SUB DRAWBOX (rr%,cc%,ww%,dd%,c1%,c2%) STATIC
+  x1%=(cc%-2)*8:y1%=rr%*8-11:x2%=(cc%+ww%)*8:y2%=(rr%+dd%-1)*8+1
+  LINE (x1%,y1%)-(x2%,y2%),c1%,bf:LINE (x1%+2,y1%+1)-(x2%-2,y2%-1),c2%,bf
+END SUB
+
